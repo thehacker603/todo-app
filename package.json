@@ -11,11 +11,13 @@
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "^2.2.0",
+    "@react-native-community/cli-server-api": "^20.0.2",
+    "@react-native-picker/picker": "2.11.1",
     "expo": "~54.0.22",
     "expo-status-bar": "~3.0.8",
     "react": "19.1.0",
     "react-dom": "19.1.0",
-    "react-native": "0.81.5",
+    "react-native": "^0.81.5",
     "react-native-web": "^0.21.0"
   },
   "private": true
