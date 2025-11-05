@@ -1,144 +1,206 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, TextInput, TouchableOpacity, FlatList, StyleSheet } from "react-native";
+import { View, Text, TextInput, TouchableOpacity, FlatList, StyleSheet, Modal } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export default function App() {
   const [task, setTask] = useState("");
   const [tasks, setTasks] = useState([]);
-  const [menuIndex, setMenuIndex] = useState(null); // task aperta per cambiare priorità
+  const [menuIndex, setMenuIndex] = useState(null);
+  const [modalVisible, setModalVisible] = useState(false);
 
   useEffect(() => { loadTasks(); }, []);
   useEffect(() => { saveTasks(); }, [tasks]);
 
   const saveTasks = async () => {
     try { await AsyncStorage.setItem("tasks", JSON.stringify(tasks)); }
-    catch (error) { console.log("Errore salvataggio:", error); }
+    catch {}
   };
 
   const loadTasks = async () => {
     try {
       const storedTasks = await AsyncStorage.getItem("tasks");
       if (storedTasks) setTasks(JSON.parse(storedTasks));
-    } catch (error) {
-      console.log("Errore caricamento:", error);
-    }
+    } catch {}
   };
 
   const addTask = () => {
     if (task.trim() === "") return;
     setTasks([...tasks, { text: task, done: false, priority: "low" }]);
     setTask("");
+    setModalVisible(false); // chiude popup
   };
 
-  const toggleTask = (index) => {
-    const newTasks = [...tasks];
-    newTasks[index].done = !newTasks[index].done;
-    setTasks(newTasks);
+  const toggleTask = (i) => {
+    const t = [...tasks];
+    t[i].done = !t[i].done;
+    setTasks(t);
   };
 
-  const deleteTask = (index) => {
-    const newTasks = tasks.filter((_, i) => i !== index);
-    setTasks(newTasks);
+  const deleteTask = (i) => {
+    setTasks(tasks.filter((_, x) => x !== i));
   };
 
-  const setPriority = (index, priority) => {
-    const newTasks = [...tasks];
-    newTasks[index].priority = priority;
-    setTasks(newTasks);
-    setMenuIndex(null); // chiudi menu
+  const setPriority = (i, p) => {
+    const t = [...tasks];
+    t[i].priority = p;
+    setTasks(t);
+    setMenuIndex(null);
   };
 
-  const getPriorityStyle = (priority) => {
-    switch (priority) {
-      case "high": return styles.high;
-      case "medium": return styles.medium;
-      default: return styles.low;
-    }
+  const priorityColor = {
+    low: "#78e08f",
+    medium: "#f6b93b",
+    high: "#e55039"
   };
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>To-Do List</Text>
-
-      <TextInput
-        style={styles.input}
-        placeholder="Aggiungi un'attività..."
-        value={task}
-        onChangeText={setTask}
-      />
-
-      <TouchableOpacity style={styles.addButton} onPress={addTask}>
-        <Text style={styles.addButtonText}>Add</Text>
-      </TouchableOpacity>
+      <Text style={styles.title}>My Tasks</Text>
 
       <FlatList
         data={tasks}
         renderItem={({ item, index }) => (
-          <View>
-            <View style={styles.taskRow}>
-              <TouchableOpacity
-                onPress={() => toggleTask(index)}
-                style={[styles.task, getPriorityStyle(item.priority), item.done && styles.done]}
-              >
-                <Text>{item.text}</Text>
+          <View style={styles.cardWrapper}>
+            <TouchableOpacity
+              onPress={() => toggleTask(index)}
+              style={[
+                styles.card,
+                { borderLeftColor: priorityColor[item.priority] },
+                item.done && styles.doneCard
+              ]}
+            >
+              <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                <Text style={[styles.cardText, item.done && styles.doneText]}>{item.text}</Text>
+                <Text style={[styles.badge, { backgroundColor: priorityColor[item.priority] }]}>
+                  {item.priority.toUpperCase()}
+                </Text>
+              </View>
+            </TouchableOpacity>
+
+            <View style={styles.actionRow}>
+              <TouchableOpacity onPress={() => setMenuIndex(menuIndex === index ? null : index)}>
+                <Text style={styles.menuDots}>⋮</Text>
               </TouchableOpacity>
 
-              <TouchableOpacity
-                style={styles.menuButton}
-                onPress={() => setMenuIndex(menuIndex === index ? null : index)}
-              >
-                <Text style={{ fontSize: 18 }}>⋮</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity onPress={() => deleteTask(index)} style={styles.deleteButton}>
-                <Text style={styles.deleteText}>X</Text>
+              <TouchableOpacity onPress={() => deleteTask(index)}>
+                <Text style={styles.deleteButton}>🗑️</Text>
               </TouchableOpacity>
             </View>
 
             {menuIndex === index && (
-              <View style={styles.priorityMenu}>
-                <TouchableOpacity onPress={() => setPriority(index, "low")}><Text>Bassa</Text></TouchableOpacity>
-                <TouchableOpacity onPress={() => setPriority(index, "medium")}><Text>Media</Text></TouchableOpacity>
-                <TouchableOpacity onPress={() => setPriority(index, "high")}><Text>Alta</Text></TouchableOpacity>
+              <View style={styles.menuBox}>
+                <TouchableOpacity onPress={() => setPriority(index, "low")}><Text style={styles.menuItem}>⬇️ Bassa</Text></TouchableOpacity>
+                <TouchableOpacity onPress={() => setPriority(index, "medium")}><Text style={styles.menuItem}>〰️ Media</Text></TouchableOpacity>
+                <TouchableOpacity onPress={() => setPriority(index, "high")}><Text style={styles.menuItem}>⬆️ Alta</Text></TouchableOpacity>
               </View>
             )}
           </View>
         )}
         keyExtractor={(item, index) => index.toString()}
       />
+
+      {/* ✅ MODAL PER AGGIUNGERE TASK */}
+      <Modal visible={modalVisible} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalBox}>
+            <Text style={styles.modalTitle}>Nuova attività</Text>
+
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Scrivi la tua task..."
+              value={task}
+              onChangeText={setTask}
+              placeholderTextColor="#aaa"
+            />
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity style={styles.cancelBtn} onPress={() => setModalVisible(false)}>
+                <Text style={styles.cancelText}>Annulla</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.saveBtn} onPress={addTask}>
+                <Text style={styles.saveText}>Aggiungi</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ✅ FLOATING BUTTON */}
+      <TouchableOpacity style={styles.fab} onPress={() => setModalVisible(true)}>
+        <Text style={styles.fabText}>＋</Text>
+      </TouchableOpacity>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20, backgroundColor: "#f2f2f2" },
-  title: { fontSize: 28, fontWeight: "bold", textAlign: "center", marginBottom: 20 },
-  input: { borderWidth: 1, borderColor: "#aaa", padding: 10, borderRadius: 8, backgroundColor: "#fff" },
-  addButton: { backgroundColor: "#007bff", padding: 12, borderRadius: 8, marginBottom: 15 },
-  addButtonText: { color: "#fff", textAlign: "center", fontWeight: "bold" },
-  
-  taskRow: { flexDirection: "row", alignItems: "center", marginBottom: 5 },
-  task: { flex: 1, padding: 10, borderRadius: 8, borderWidth: 1, borderColor: "#ccc" },
-  done: { textDecorationLine: "line-through", opacity: 0.6 },
-  
-  menuButton: { marginLeft: 8, padding: 8 },
-  deleteButton: { marginLeft: 6, backgroundColor: "#ff4d4d", padding: 8, borderRadius: 6 },
-  deleteText: { color: "#fff", fontWeight: "bold" },
+  container: { flex: 1, paddingTop: 50, backgroundColor: "#f8f9fa" },
+  title: { fontSize: 26, fontWeight: "700", textAlign: "center", marginBottom: 10 },
 
-  /** SFONDI PRIORITÀ */
-  low: { backgroundColor: "#b7f8a1" },      // verde chiaro
-  medium: { backgroundColor: "#ffe9a3" },   // giallo chiaro
-  high: { backgroundColor: "#ffb3b3" },     // rosso chiaro
-
-  /** MENU PRIORITÀ */
-  priorityMenu: {
+  // CARD TASK
+  cardWrapper: { marginHorizontal: 16, marginBottom: 12 },
+  card: {
     backgroundColor: "#fff",
-    padding: 8,
-    borderRadius: 8,
+    padding: 14,
+    borderRadius: 12,
+    borderLeftWidth: 6,
+    shadowColor: "#000",
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  cardText: { fontSize: 16, fontWeight: "500" },
+  doneCard: { opacity: 0.5 },
+  doneText: { textDecorationLine: "line-through" },
+  badge: { paddingHorizontal: 10, paddingVertical: 2, color: "#fff", fontWeight: "700", borderRadius: 20, fontSize: 11 },
+  actionRow: { flexDirection: "row", justifyContent: "flex-end", marginTop: 6 },
+  menuDots: { fontSize: 18, marginRight: 10 },
+  deleteButton: { fontSize: 18 },
+  menuBox: { backgroundColor: "#fff", padding: 10, borderRadius: 10, borderWidth: 1, borderColor: "#ccc", marginTop: 5 },
+  menuItem: { paddingVertical: 6, fontSize: 14 },
+
+  // FLOATING BUTTON
+  fab: {
+    position: "absolute",
+    right: 20,
+    bottom: 30,
+    backgroundColor: "#4e73df",
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    justifyContent: "center",
+    alignItems: "center",
+    elevation: 5
+  },
+  fabText: { fontSize: 34, color: "#fff", lineHeight: 34 },
+
+  // MODAL
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.4)",
+    justifyContent: "center",
+    alignItems: "center"
+  },
+  modalBox: {
+    width: "80%",
+    backgroundColor: "#fff",
+    padding: 20,
+    borderRadius: 15,
+    elevation: 5
+  },
+  modalTitle: { fontSize: 20, fontWeight: "bold", marginBottom: 10, textAlign: "center" },
+  modalInput: {
     borderWidth: 1,
     borderColor: "#ccc",
-    marginBottom: 8,
-    marginLeft: 5,
-    width: 150
+    borderRadius: 10,
+    padding: 12,
+    fontSize: 16,
+    marginBottom: 15
   },
+  modalButtons: { flexDirection: "row", justifyContent: "space-between" },
+  cancelBtn: { padding: 10 },
+  cancelText: { color: "#555", fontSize: 16 },
+  saveBtn: { backgroundColor: "#4e73df", padding: 10, borderRadius: 10 },
+  saveText: { color: "#fff", fontSize: 16, fontWeight: "600" }
 });
