@@ -6,6 +6,7 @@ import {
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Notifications from "expo-notifications";
 import DateTimePicker from "@react-native-community/datetimepicker";
+import { Menu, Provider } from "react-native-paper";
 
 /* --------------------
    Notification handler
@@ -187,6 +188,13 @@ export default function App() {
     setModalVisible(true);
   };
 
+  const updatePriority = (id, newPriority) => {
+    const updated = tasks.map((t) =>
+      t.id === id ? { ...t, priority: newPriority } : t
+    );
+    setTasks(updated);
+  };
+
   /* --------------------
      Filters & sorting
      -------------------- */
@@ -200,8 +208,6 @@ export default function App() {
       if (sortBy === "done") return a.done === b.done ? 0 : a.done ? 1 : -1;
       return new Date(b.createdAt) - new Date(a.createdAt);
     });
-
-  const getCategories = () => Array.from(new Set(tasks.map(t => t.category || "Generale")));
 
   const humanCountdown = (isoDate) => {
     if (!isoDate) return "";
@@ -219,165 +225,192 @@ export default function App() {
      Render
      -------------------- */
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>My Tasks</Text>
+    <Provider>
+      <View style={styles.container}>
+        <Text style={styles.title}>My Tasks</Text>
 
-      <TextInput
-        style={styles.searchInput}
-        placeholder="Cerca attività..."
-        value={search}
-        onChangeText={setSearch}
-      />
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Cerca attività..."
+          value={search}
+          onChangeText={setSearch}
+        />
 
-      <View style={styles.filterRow}>
-        {["default", "priority", "done"].map((t) => (
-          <TouchableOpacity key={t} onPress={() => setSortBy(t)}>
-            <Text style={sortBy === t ? styles.activeSort : styles.filterText}>
-              {t === "default" ? "Predefinito" : t === "priority" ? "Priorità" : "Stato"}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      <FlatList
-        data={filteredTasks}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <View style={styles.cardWrapper}>
-            <TouchableOpacity
-              onPress={() => toggleTask(item.id)}
-              style={[
-                styles.card,
-                { borderLeftColor: item.priority === "high" ? "#e55039" : item.priority === "medium" ? "#f6b93b" : "#78e08f" },
-                item.done && styles.doneCard
-              ]}
-            >
-              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-                <View style={{ flex: 1, paddingRight: 8 }}>
-                  <Text style={[styles.cardText, item.done && styles.doneText]}>{item.text}</Text>
-                  <Text style={styles.categoryText}>📁 {item.category}</Text>
-                  {item.reminderDate && <Text style={styles.dueDate}>{humanCountdown(item.reminderDate)}</Text>}
-                </View>
-
-                <View style={{ alignItems: "flex-end" }}>
-                  <Text style={[styles.badge, {
-                    backgroundColor: item.priority === "high" ? "#e55039" :
-                      item.priority === "medium" ? "#f6b93b" : "#78e08f"
-                  }]}>
-                    {item.priority.toUpperCase()}
-                  </Text>
-
-                  <View style={{ flexDirection: "row", marginTop: 6 }}>
-                    <TouchableOpacity onPress={() => editTask(item.id)} style={styles.iconHitbox}>
-                      <Text style={styles.editIcon}>✏️</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={() => confirmDeleteTask(item.id)} style={styles.iconHitbox}>
-                      <Text style={styles.deleteButton}>🗑️</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              </View>
-            </TouchableOpacity>
-          </View>
-        )}
-        contentContainerStyle={{ paddingBottom: 120 }}
-      />
-
-      {/* Modal */}
-      <Modal visible={modalVisible} transparent animationType="fade">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalBox}>
-            <Text style={styles.modalTitle}>{editId ? "Modifica attività" : "Nuova attività"}</Text>
-
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Descrizione attività"
-              value={task}
-              onChangeText={setTask}
-            />
-
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Categoria (es. Lavoro)"
-              value={category}
-              onChangeText={setCategory}
-            />
-
-            <TouchableOpacity style={styles.reminderBtn} onPress={() => setShowPicker(true)}>
-              <Text style={styles.reminderText}>
-                {reminderDate
-                  ? `Promemoria evento: ${new Date(reminderDate).toLocaleString()}`
-                  : "📅 Scegli data/ora evento"}
+        <View style={styles.filterRow}>
+          {["default", "priority", "done"].map((t) => (
+            <TouchableOpacity key={t} onPress={() => setSortBy(t)}>
+              <Text style={sortBy === t ? styles.activeSort : styles.filterText}>
+                {t === "default" ? "Predefinito" : t === "priority" ? "Priorità" : "Stato"}
               </Text>
             </TouchableOpacity>
+          ))}
+        </View>
 
-            {showPicker && (
-              <DateTimePicker
-                value={reminderDate ? new Date(reminderDate) : new Date()}
-                mode="datetime"
-                is24Hour
-                display="default"
-                onChange={(e, selected) => {
-                  setShowPicker(false);
-                  if (selected) setReminderDate(selected);
-                }}
+        <FlatList
+          data={filteredTasks}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item }) => (
+            <TaskItem
+              item={item}
+              onToggle={() => toggleTask(item.id)}
+              onEdit={() => editTask(item.id)}
+              onDelete={() => confirmDeleteTask(item.id)}
+              onChangePriority={(prio) => updatePriority(item.id, prio)}
+              humanCountdown={humanCountdown}
+            />
+          )}
+          contentContainerStyle={{ paddingBottom: 120 }}
+        />
+
+        {/* Modal per nuova/modifica attività */}
+        <Modal visible={modalVisible} transparent animationType="fade">
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalBox}>
+              <Text style={styles.modalTitle}>{editId ? "Modifica attività" : "Nuova attività"}</Text>
+
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Descrizione attività"
+                value={task}
+                onChangeText={setTask}
               />
-            )}
 
-            <View style={{ marginTop: 8 }}>
-              <Text style={{ marginBottom: 6, color: "#666" }}>Avviso prima dell'evento:</Text>
-              <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-                {[{ label: "5m", val: 5 }, { label: "30m", val: 30 }, { label: "1h", val: 60 }, { label: "1d", val: 1440 }].map(o => (
-                  <TouchableOpacity key={o.val} onPress={() => setOffsetMinutes(o.val)}
-                    style={[styles.offsetBtn, offsetMinutes === o.val && styles.offsetActive]}>
-                    <Text style={offsetMinutes === o.val ? styles.offsetActiveText : styles.offsetText}>{o.label}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Categoria (es. Lavoro)"
+                value={category}
+                onChangeText={setCategory}
+              />
 
-            <View style={{ marginTop: 12 }}>
-              <Text style={{ marginBottom: 6, color: "#666" }}>Ripetizione:</Text>
-              <View style={styles.repeatRow}>
-                {["none", "daily", "weekly"].map(r => (
-                  <TouchableOpacity key={r} onPress={() => setRepeatType(r)}>
-                    <Text style={[styles.repeatOption, repeatType === r && styles.activeRepeat]}>
-                      {r === "none" ? "Nessuna" : r === "daily" ? "Giornaliera" : "Settimanale"}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-
-            <View style={styles.modalButtons}>
-              <TouchableOpacity onPress={resetModal}>
-                <Text style={styles.cancelText}>Annulla</Text>
+              <TouchableOpacity style={styles.reminderBtn} onPress={() => setShowPicker(true)}>
+                <Text style={styles.reminderText}>
+                  {reminderDate
+                    ? `Promemoria evento: ${new Date(reminderDate).toLocaleString()}`
+                    : "📅 Scegli data/ora evento"}
+                </Text>
               </TouchableOpacity>
 
-              <TouchableOpacity style={styles.saveBtn} onPress={addOrUpdateTask}>
-                <Text style={styles.saveText}>{editId ? "Salva" : "Aggiungi"}</Text>
-              </TouchableOpacity>
+              {showPicker && (
+                <DateTimePicker
+                  value={reminderDate ? new Date(reminderDate) : new Date()}
+                  mode="datetime"
+                  is24Hour
+                  display="default"
+                  onChange={(e, selected) => {
+                    setShowPicker(false);
+                    if (selected) setReminderDate(selected);
+                  }}
+                />
+              )}
+
+              <View style={{ marginTop: 8 }}>
+                <Text style={{ marginBottom: 6, color: "#666" }}>Avviso prima dell'evento:</Text>
+                <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                  {[{ label: "5m", val: 5 }, { label: "30m", val: 30 }, { label: "1h", val: 60 }, { label: "1d", val: 1440 }].map(o => (
+                    <TouchableOpacity key={o.val} onPress={() => setOffsetMinutes(o.val)}
+                      style={[styles.offsetBtn, offsetMinutes === o.val && styles.offsetActive]}>
+                      <Text style={offsetMinutes === o.val ? styles.offsetActiveText : styles.offsetText}>{o.label}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              <View style={{ marginTop: 12 }}>
+                <Text style={{ marginBottom: 6, color: "#666" }}>Ripetizione:</Text>
+                <View style={styles.repeatRow}>
+                  {["none", "daily", "weekly"].map(r => (
+                    <TouchableOpacity key={r} onPress={() => setRepeatType(r)}>
+                      <Text style={[styles.repeatOption, repeatType === r && styles.activeRepeat]}>
+                        {r === "none" ? "Nessuna" : r === "daily" ? "Giornaliera" : "Settimanale"}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              <View style={styles.modalButtons}>
+                <TouchableOpacity onPress={resetModal}>
+                  <Text style={styles.cancelText}>Annulla</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity style={styles.saveBtn} onPress={addOrUpdateTask}>
+                  <Text style={styles.saveText}>{editId ? "Salva" : "Aggiungi"}</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
-        </View>
-      </Modal>
+        </Modal>
 
-      <TouchableOpacity style={styles.fab} onPress={() => setModalVisible(true)}>
-        <Text style={styles.fabText}>＋</Text>
+        <TouchableOpacity style={styles.fab} onPress={() => setModalVisible(true)}>
+          <Text style={styles.fabText}>＋</Text>
+        </TouchableOpacity>
+      </View>
+    </Provider>
+  );
+}
+
+/* --------------------
+   Componente singolo Task
+   -------------------- */
+function TaskItem({ item, onToggle, onEdit, onDelete, onChangePriority, humanCountdown }) {
+  const [menuVisible, setMenuVisible] = useState(false);
+
+  const openMenu = () => setMenuVisible(true);
+  const closeMenu = () => setMenuVisible(false);
+
+  const priorityColor =
+    item.priority === "high"
+      ? "#e55039"
+      : item.priority === "medium"
+      ? "#f6b93b"
+      : "#78e08f";
+
+  return (
+    <View style={styles.cardWrapper}>
+      <TouchableOpacity
+        onPress={onToggle}
+        style={[
+          styles.card,
+          { borderLeftColor: priorityColor },
+          item.done && styles.doneCard,
+        ]}
+      >
+        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+          <View style={{ flex: 1, paddingRight: 8 }}>
+            <Text style={[styles.cardText, item.done && styles.doneText]}>{item.text}</Text>
+            <Text style={styles.categoryText}>📁 {item.category}</Text>
+            {item.reminderDate && <Text style={styles.dueDate}>{humanCountdown(item.reminderDate)}</Text>}
+          </View>
+
+          <Menu
+            visible={menuVisible}
+            onDismiss={closeMenu}
+            anchor={
+              <TouchableOpacity onPress={openMenu} style={{ padding: 6 }}>
+                <Text style={{ fontSize: 22 }}>⋯</Text>
+              </TouchableOpacity>
+            }
+          >
+            <Menu.Item onPress={() => { closeMenu(); onEdit(); }} title="✏️ Modifica" />
+            <Menu.Item onPress={() => { closeMenu(); onDelete(); }} title="🗑️ Elimina" />
+            <Menu.Item title="🎯 Priorità" disabled />
+            <Menu.Item onPress={() => { closeMenu(); onChangePriority("low"); }} title="Low" />
+            <Menu.Item onPress={() => { closeMenu(); onChangePriority("medium"); }} title="Medium" />
+            <Menu.Item onPress={() => { closeMenu(); onChangePriority("high"); }} title="High" />
+          </Menu>
+        </View>
       </TouchableOpacity>
     </View>
   );
 }
 
 /* --------------------
-   Styles (puliti e ordinati)
+   Styles
    -------------------- */
 const styles = StyleSheet.create({
-  /* palette */
   container: { flex: 1, backgroundColor: "#f8f9fa", paddingTop: 50 },
   title: { fontSize: 28, fontWeight: "700", textAlign: "center", color: "#4e73df", marginBottom: 12 },
 
-  // search + filters
   searchInput: {
     backgroundColor: "#fff", borderRadius: 12, marginHorizontal: 16, marginBottom: 8,
     paddingHorizontal: 14, paddingVertical: 10, fontSize: 16, borderWidth: 1, borderColor: "#e6e6e6",
@@ -386,7 +419,6 @@ const styles = StyleSheet.create({
   filterText: { color: "#444" },
   activeSort: { color: "#4e73df", fontWeight: "700", textDecorationLine: "underline" },
 
-  // card
   cardWrapper: { marginHorizontal: 16, marginBottom: 14 },
   card: {
     backgroundColor: "#fff", borderRadius: 14, paddingVertical: 12, paddingHorizontal: 14, borderLeftWidth: 6,
@@ -397,14 +429,7 @@ const styles = StyleSheet.create({
   doneText: { textDecorationLine: "line-through", color: "#8a8a8a" },
   categoryText: { fontSize: 13, color: "#666" },
   dueDate: { fontSize: 12, color: "#e55039", marginTop: 4 },
-  badge: { alignSelf: "flex-end", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, color: "#fff", fontWeight: "700", fontSize: 11, marginBottom: 6 },
 
-  // icons
-  editIcon: { fontSize: 18, marginHorizontal: 6 },
-  deleteButton: { fontSize: 18, marginHorizontal: 6 },
-  iconHitbox: { padding: 6, borderRadius: 8 },
-
-  // fab
   fab: {
     position: "absolute", right: 24, bottom: 30, backgroundColor: "#4e73df",
     width: 64, height: 64, borderRadius: 32, justifyContent: "center", alignItems: "center",
@@ -412,17 +437,11 @@ const styles = StyleSheet.create({
   },
   fabText: { fontSize: 34, color: "#fff", lineHeight: 36 },
 
-  // modal
   modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "center", alignItems: "center" },
   modalBox: { width: "88%", backgroundColor: "#fff", borderRadius: 16, paddingVertical: 20, paddingHorizontal: 18, shadowColor: "#000", shadowOpacity: 0.16, shadowRadius: 8, elevation: 8 },
   modalTitle: { fontSize: 20, fontWeight: "700", textAlign: "center", color: "#4e73df", marginBottom: 12 },
   modalInput: { borderWidth: 1, borderColor: "#eee", borderRadius: 10, paddingVertical: 10, paddingHorizontal: 12, fontSize: 16, marginBottom: 10, backgroundColor: "#fafafa" },
 
-  // category chips
-  categoryChip: { backgroundColor: "#f1f3ff", paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16, marginRight: 8 },
-  categoryChipText: { color: "#4e73df", fontWeight: "600" },
-
-  // reminder controls
   reminderBtn: { borderWidth: 1, borderColor: "#4e73df", borderRadius: 10, paddingVertical: 10, marginBottom: 8, alignItems: "center" },
   reminderText: { color: "#4e73df", fontWeight: "600" },
 
