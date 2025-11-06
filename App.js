@@ -32,7 +32,8 @@ export default function App() {
 
   const [category, setCategory] = useState("");
   const [reminderDate, setReminderDate] = useState(null);
-  const [showPicker, setShowPicker] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
   const [offsetMinutes, setOffsetMinutes] = useState(5);
   const [repeatType, setRepeatType] = useState("none");
 
@@ -282,7 +283,10 @@ export default function App() {
                 onChangeText={setCategory}
               />
 
-              <TouchableOpacity style={styles.reminderBtn} onPress={() => setShowPicker(true)}>
+              <TouchableOpacity
+                style={styles.reminderBtn}
+                onPress={() => setShowDatePicker(true)}
+              >
                 <Text style={styles.reminderText}>
                   {reminderDate
                     ? `Promemoria evento: ${new Date(reminderDate).toLocaleString()}`
@@ -290,15 +294,38 @@ export default function App() {
                 </Text>
               </TouchableOpacity>
 
-              {showPicker && (
+              {showDatePicker && (
                 <DateTimePicker
                   value={reminderDate ? new Date(reminderDate) : new Date()}
-                  mode="datetime"
+                  mode="date"
+                  display="default"
+                  onChange={(event, selectedDate) => {
+                    setShowDatePicker(false);
+                    if (event.type === "set" && selectedDate) {
+                      const newDate = new Date(selectedDate);
+                      setTimeout(() => {
+                        setShowTimePicker(true);
+                        setReminderDate(newDate);
+                      }, 300);
+                    }
+                  }}
+                />
+              )}
+
+              {showTimePicker && (
+                <DateTimePicker
+                  value={reminderDate ? new Date(reminderDate) : new Date()}
+                  mode="time"
                   is24Hour
                   display="default"
-                  onChange={(e, selected) => {
-                    setShowPicker(false);
-                    if (selected) setReminderDate(selected);
+                  onChange={(event, selectedTime) => {
+                    setShowTimePicker(false);
+                    if (event.type === "set" && selectedTime) {
+                      const finalDate = new Date(reminderDate || new Date());
+                      finalDate.setHours(selectedTime.getHours());
+                      finalDate.setMinutes(selectedTime.getMinutes());
+                      setReminderDate(finalDate);
+                    }
                   }}
                 />
               )}
@@ -391,9 +418,9 @@ function TaskItem({ item, onToggle, onEdit, onDelete, onChangePriority, humanCou
               </TouchableOpacity>
             }
           >
-            <Menu.Item onPress={() => { closeMenu(); onEdit(); }} title="✏️ Modifica" />
-            <Menu.Item onPress={() => { closeMenu(); onDelete(); }} title="🗑️ Elimina" />
-            <Menu.Item title="🎯 Priorità" disabled />
+            <Menu.Item onPress={() => { closeMenu(); onEdit(); }} title="Modifica" />
+            <Menu.Item onPress={() => { closeMenu(); onDelete(); }} title="Elimina" />
+            <Menu.Item title="Priorità" disabled />
             <Menu.Item onPress={() => { closeMenu(); onChangePriority("low"); }} title="Low" />
             <Menu.Item onPress={() => { closeMenu(); onChangePriority("medium"); }} title="Medium" />
             <Menu.Item onPress={() => { closeMenu(); onChangePriority("high"); }} title="High" />
@@ -410,7 +437,6 @@ function TaskItem({ item, onToggle, onEdit, onDelete, onChangePriority, humanCou
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#f8f9fa", paddingTop: 50 },
   title: { fontSize: 28, fontWeight: "700", textAlign: "center", color: "#4e73df", marginBottom: 12 },
-
   searchInput: {
     backgroundColor: "#fff", borderRadius: 12, marginHorizontal: 16, marginBottom: 8,
     paddingHorizontal: 14, paddingVertical: 10, fontSize: 16, borderWidth: 1, borderColor: "#e6e6e6",
@@ -418,7 +444,6 @@ const styles = StyleSheet.create({
   filterRow: { flexDirection: "row", justifyContent: "space-around", marginBottom: 10 },
   filterText: { color: "#444" },
   activeSort: { color: "#4e73df", fontWeight: "700", textDecorationLine: "underline" },
-
   cardWrapper: { marginHorizontal: 16, marginBottom: 14 },
   card: {
     backgroundColor: "#fff", borderRadius: 14, paddingVertical: 12, paddingHorizontal: 14, borderLeftWidth: 6,
