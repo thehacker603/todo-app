@@ -5,6 +5,8 @@ import {
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Notifications from "expo-notifications";
+import * as Updates from "expo-updates";
+import Constants from "expo-constants";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { Menu, Provider } from "react-native-paper";
 
@@ -37,9 +39,42 @@ export default function App() {
   const [offsetMinutes, setOffsetMinutes] = useState(5);
   const [repeatType, setRepeatType] = useState("none");
 
+  /* --------------------
+     Lifecycle
+     -------------------- */
   useEffect(() => { loadTasks(); }, []);
   useEffect(() => { saveTasks(); }, [tasks]);
 
+  // 🔄 Controllo aggiornamenti automatico all'avvio
+  useEffect(() => {
+    const checkForUpdates = async () => {
+      try {
+        const update = await Updates.checkForUpdateAsync();
+        if (update.isAvailable) {
+          Alert.alert(
+            "Nuova versione disponibile",
+            "È disponibile un aggiornamento dell'app. Vuoi installarlo ora?",
+            [
+              { text: "Più tardi", style: "cancel" },
+              {
+                text: "Aggiorna ora",
+                onPress: async () => {
+                  await Updates.fetchUpdateAsync();
+                  await Updates.reloadAsync();
+                },
+              },
+            ]
+          );
+        }
+      } catch (error) {
+        console.log("Errore durante il controllo aggiornamenti:", error);
+      }
+    };
+
+    checkForUpdates();
+  }, []);
+
+  // 🔔 Permessi notifiche
   useEffect(() => {
     (async () => {
       const { status } = await Notifications.requestPermissionsAsync();
@@ -230,6 +265,11 @@ export default function App() {
       <View style={styles.container}>
         <Text style={styles.title}>My Tasks</Text>
 
+        {/* Mostra versione app */}
+        <Text style={{ textAlign: "center", color: "#888", marginBottom: 8 }}>
+          Versione {Constants.expoConfig?.version || "1.0.0"}
+        </Text>
+
         <TextInput
           style={styles.searchInput}
           placeholder="Cerca attività..."
@@ -264,10 +304,17 @@ export default function App() {
         />
 
         {/* Modal per nuova/modifica attività */}
-        <Modal visible={modalVisible} transparent animationType="fade">
+        <Modal
+          visible={modalVisible}
+          transparent
+          animationType="slide"
+          onRequestClose={resetModal}
+        >
           <View style={styles.modalOverlay}>
             <View style={styles.modalBox}>
-              <Text style={styles.modalTitle}>{editId ? "Modifica attività" : "Nuova attività"}</Text>
+              <Text style={styles.modalTitle}>
+                {editId ? "Modifica attività" : "Nuova attività"}
+              </Text>
 
               <TextInput
                 style={styles.modalInput}
@@ -278,96 +325,109 @@ export default function App() {
 
               <TextInput
                 style={styles.modalInput}
-                placeholder="Categoria (es. Lavoro)"
+                placeholder="Categoria (es. Lavoro, Casa...)"
                 value={category}
                 onChangeText={setCategory}
               />
 
+              {/* Promemoria */}
               <TouchableOpacity
                 style={styles.reminderBtn}
                 onPress={() => setShowDatePicker(true)}
               >
                 <Text style={styles.reminderText}>
                   {reminderDate
-                    ? `Promemoria evento: ${new Date(reminderDate).toLocaleString()}`
-                    : "📅 Scegli data/ora evento"}
+                    ? `Promemoria: ${new Date(reminderDate).toLocaleString()}`
+                    : "Aggiungi promemoria"}
                 </Text>
               </TouchableOpacity>
 
+              {/* Date Picker */}
               {showDatePicker && (
                 <DateTimePicker
-                  value={reminderDate ? new Date(reminderDate) : new Date()}
+                  value={reminderDate || new Date()}
                   mode="date"
-                  display="default"
-                  onChange={(event, selectedDate) => {
+                  onChange={(e, date) => {
                     setShowDatePicker(false);
-                    if (event.type === "set" && selectedDate) {
-                      const newDate = new Date(selectedDate);
-                      setTimeout(() => {
-                        setShowTimePicker(true);
-                        setReminderDate(newDate);
-                      }, 300);
-                    }
+                    if (date) setReminderDate(date), setShowTimePicker(true);
                   }}
                 />
               )}
 
+              {/* Time Picker */}
               {showTimePicker && (
                 <DateTimePicker
-                  value={reminderDate ? new Date(reminderDate) : new Date()}
+                  value={reminderDate || new Date()}
                   mode="time"
-                  is24Hour
-                  display="default"
-                  onChange={(event, selectedTime) => {
+                  onChange={(e, time) => {
                     setShowTimePicker(false);
-                    if (event.type === "set" && selectedTime) {
-                      const finalDate = new Date(reminderDate || new Date());
-                      finalDate.setHours(selectedTime.getHours());
-                      finalDate.setMinutes(selectedTime.getMinutes());
-                      setReminderDate(finalDate);
+                    if (time) {
+                      const d = reminderDate || new Date();
+                      d.setHours(time.getHours());
+                      d.setMinutes(time.getMinutes());
+                      setReminderDate(d);
                     }
                   }}
                 />
               )}
 
-              <View style={{ marginTop: 8 }}>
-                <Text style={{ marginBottom: 6, color: "#666" }}>Avviso prima dell'evento:</Text>
-                <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-                  {[{ label: "5m", val: 5 }, { label: "30m", val: 30 }, { label: "1h", val: 60 }, { label: "1d", val: 1440 }].map(o => (
-                    <TouchableOpacity key={o.val} onPress={() => setOffsetMinutes(o.val)}
-                      style={[styles.offsetBtn, offsetMinutes === o.val && styles.offsetActive]}>
-                      <Text style={offsetMinutes === o.val ? styles.offsetActiveText : styles.offsetText}>{o.label}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
+              {/* Offset */}
+              <View style={{ flexDirection: "row", justifyContent: "center", marginBottom: 10 }}>
+                {[5, 10, 15].map((min) => (
+                  <TouchableOpacity
+                    key={min}
+                    style={[
+                      styles.offsetBtn,
+                      offsetMinutes === min && styles.offsetActive,
+                    ]}
+                    onPress={() => setOffsetMinutes(min)}
+                  >
+                    <Text
+                      style={[
+                        styles.offsetText,
+                        offsetMinutes === min && styles.offsetActiveText,
+                      ]}
+                    >
+                      {min} min prima
+                    </Text>
+                  </TouchableOpacity>
+                ))}
               </View>
 
-              <View style={{ marginTop: 12 }}>
-                <Text style={{ marginBottom: 6, color: "#666" }}>Ripetizione:</Text>
-                <View style={styles.repeatRow}>
-                  {["none", "daily", "weekly"].map(r => (
-                    <TouchableOpacity key={r} onPress={() => setRepeatType(r)}>
-                      <Text style={[styles.repeatOption, repeatType === r && styles.activeRepeat]}>
-                        {r === "none" ? "Nessuna" : r === "daily" ? "Giornaliera" : "Settimanale"}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
+              {/* Ripetizione */}
+              <View style={styles.repeatRow}>
+                {["none", "daily", "weekly"].map((type) => (
+                  <TouchableOpacity key={type} onPress={() => setRepeatType(type)}>
+                    <Text
+                      style={[
+                        styles.repeatOption,
+                        repeatType === type && styles.activeRepeat,
+                      ]}
+                    >
+                      {type === "none"
+                        ? "Nessuna"
+                        : type === "daily"
+                        ? "Giornaliera"
+                        : "Settimanale"}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
               </View>
 
+              {/* Pulsanti */}
               <View style={styles.modalButtons}>
                 <TouchableOpacity onPress={resetModal}>
                   <Text style={styles.cancelText}>Annulla</Text>
                 </TouchableOpacity>
-
                 <TouchableOpacity style={styles.saveBtn} onPress={addOrUpdateTask}>
-                  <Text style={styles.saveText}>{editId ? "Salva" : "Aggiungi"}</Text>
+                  <Text style={styles.saveText}>Salva</Text>
                 </TouchableOpacity>
               </View>
             </View>
           </View>
         </Modal>
 
+        {/* Floating Button */}
         <TouchableOpacity style={styles.fab} onPress={() => setModalVisible(true)}>
           <Text style={styles.fabText}>＋</Text>
         </TouchableOpacity>
@@ -449,38 +509,46 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff", borderRadius: 14, paddingVertical: 12, paddingHorizontal: 14, borderLeftWidth: 6,
     shadowColor: "#000", shadowOpacity: 0.06, shadowRadius: 6, elevation: 3,
   },
-  cardText: { fontSize: 17, fontWeight: "600", color: "#222", marginBottom: 4 },
+  cardText: { fontSize: 17, fontWeight: "500", color: "#333" },
   doneCard: { opacity: 0.6 },
-  doneText: { textDecorationLine: "line-through", color: "#8a8a8a" },
-  categoryText: { fontSize: 13, color: "#666" },
-  dueDate: { fontSize: 12, color: "#e55039", marginTop: 4 },
+  doneText: { textDecorationLine: "line-through", color: "#888" },
+  categoryText: { fontSize: 13, color: "#777", marginTop: 3 },
+  dueDate: { fontSize: 13, color: "#4e73df", marginTop: 3 },
 
   fab: {
-    position: "absolute", right: 24, bottom: 30, backgroundColor: "#4e73df",
-    width: 64, height: 64, borderRadius: 32, justifyContent: "center", alignItems: "center",
-    shadowColor: "#000", shadowOpacity: 0.25, shadowRadius: 4, elevation: 6,
+    position: "absolute", right: 20, bottom: 30, backgroundColor: "#4e73df", width: 58, height: 58,
+    borderRadius: 29, justifyContent: "center", alignItems: "center", elevation: 6,
   },
-  fabText: { fontSize: 34, color: "#fff", lineHeight: 36 },
+  fabText: { color: "#fff", fontSize: 32, marginTop: -3 },
 
-  modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "center", alignItems: "center" },
-  modalBox: { width: "88%", backgroundColor: "#fff", borderRadius: 16, paddingVertical: 20, paddingHorizontal: 18, shadowColor: "#000", shadowOpacity: 0.16, shadowRadius: 8, elevation: 8 },
-  modalTitle: { fontSize: 20, fontWeight: "700", textAlign: "center", color: "#4e73df", marginBottom: 12 },
-  modalInput: { borderWidth: 1, borderColor: "#eee", borderRadius: 10, paddingVertical: 10, paddingHorizontal: 12, fontSize: 16, marginBottom: 10, backgroundColor: "#fafafa" },
-
-  reminderBtn: { borderWidth: 1, borderColor: "#4e73df", borderRadius: 10, paddingVertical: 10, marginBottom: 8, alignItems: "center" },
-  reminderText: { color: "#4e73df", fontWeight: "600" },
-
-  offsetBtn: { flex: 1, borderWidth: 1, borderColor: "#ddd", paddingVertical: 8, marginHorizontal: 4, borderRadius: 8, alignItems: "center" },
-  offsetActive: { backgroundColor: "#4e73df", borderColor: "#4e73df" },
-  offsetText: { color: "#444", fontWeight: "600" },
-  offsetActiveText: { color: "#fff", fontWeight: "700" },
-
+  modalOverlay: {
+    flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center",
+  },
+  modalBox: {
+    backgroundColor: "#fff", borderRadius: 16, padding: 20, width: "85%", shadowColor: "#000",
+    shadowOpacity: 0.2, shadowRadius: 8, elevation: 8,
+  },
+  modalTitle: { fontSize: 20, fontWeight: "700", color: "#4e73df", marginBottom: 14, textAlign: "center" },
+  modalInput: {
+    backgroundColor: "#f5f6fa", borderRadius: 10, padding: 10, marginBottom: 10,
+    borderWidth: 1, borderColor: "#ddd",
+  },
+  reminderBtn: {
+    backgroundColor: "#eaf1ff", borderRadius: 10, padding: 10, marginBottom: 10, alignItems: "center",
+  },
+  reminderText: { color: "#4e73df" },
+  offsetBtn: {
+    backgroundColor: "#f0f0f0", paddingVertical: 6, paddingHorizontal: 10,
+    borderRadius: 8, marginHorizontal: 5,
+  },
+  offsetActive: { backgroundColor: "#4e73df" },
+  offsetText: { color: "#333" },
+  offsetActiveText: { color: "#fff" },
   repeatRow: { flexDirection: "row", justifyContent: "space-around", marginBottom: 12 },
-  repeatOption: { fontSize: 14, color: "#555", paddingHorizontal: 10, paddingVertical: 4 },
-  activeRepeat: { color: "#4e73df", fontWeight: "700", textDecorationLine: "underline" },
-
-  modalButtons: { flexDirection: "row", justifyContent: "space-between", marginTop: 6 },
-  cancelText: { color: "#555", fontSize: 16 },
-  saveBtn: { backgroundColor: "#4e73df", paddingVertical: 10, paddingHorizontal: 18, borderRadius: 10 },
+  repeatOption: { color: "#666", padding: 5 },
+  activeRepeat: { color: "#4e73df", fontWeight: "600", textDecorationLine: "underline" },
+  modalButtons: { flexDirection: "row", justifyContent: "space-around", marginTop: 10 },
+  cancelText: { color: "#e55039", fontSize: 16 },
+  saveBtn: { backgroundColor: "#4e73df", paddingHorizontal: 20, paddingVertical: 10, borderRadius: 10 },
   saveText: { color: "#fff", fontSize: 16, fontWeight: "600" },
 });
